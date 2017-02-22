@@ -53,13 +53,13 @@ void handle_client(int c_fd, struct sockaddr_in client)
 {
     struct sockaddr_in request;
     int flag = 0;
-    char buffer[500], method[10000], url[10000], protocol[10000], host[10000], path[10000];
+    char buffer[PACKET_SIZE], method[10000], url[10000], protocol[10000], host[10000], path[10000];
     int i_port;
     long l_port;
 
-    bzero((char*)buffer, 500);
+    bzero((char*)buffer, PACKET_SIZE);
     //
-    recv(c_fd, buffer, 500, 0);
+    recv(c_fd, buffer, PACKET_SIZE, 0);
     //
 
     if (sscanf(buffer, "%[^ ] %[^ ] %[^ ]", method, url, protocol) != 3)
@@ -90,8 +90,8 @@ void handle_client(int c_fd, struct sockaddr_in client)
             {
                 do
                 {
-                    bzero((char *)buffer, 500);
-                    n = recv(sockfd, buffer, 500, 0);
+                    bzero((char *)buffer, PACKET_SIZE);
+                    n = recv(sockfd, buffer, PACKET_SIZE, 0);
                     if (n > 0)
                         send(c_fd, buffer, n, 0);
                 }while(n>0);
