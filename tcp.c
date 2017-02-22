@@ -4,8 +4,7 @@
 #include <unistd.h>
 #include <netdb.h>
 //
-#define PACKET_SIZE 4096
-#define TIMEOUT 10000
+#define PACKET_SIZE 1024
 //
 int init_sock(int port);
 int init_connection(char * host, int port);
@@ -49,64 +48,108 @@ void loop() {
     }
 }
 
+int getheaderlength(int fd)
+{
+    int c = 0;
+
+    ssize_t e;
+    char tmp[10];
+    bzero((char*)tmp, 1);
+
+    do
+    {
+        e = recv(fd, tmp, 1, MSG_PEEK);
+        if (e > 0)
+        {
+            if (strcmp(tmp, "\n") == 0)
+                break;
+            else
+                c++;
+        }
+    }while (e > 0);
+
+    return c;
+}
+
 void handle_client(int c_fd, struct sockaddr_in client)
 {
     struct sockaddr_in request;
     int flag = 0;
-    char buffer[PACKET_SIZE], method[10000], url[10000], protocol[10000], host[10000], path[10000];
+    char method[4], url[10000], protocol[10000], host[10000], path[10000];
     int i_port;
     long l_port;
 
-    bzero((char*)buffer, PACKET_SIZE);
-    //
-    recv(c_fd, buffer, PACKET_SIZE, 0);
     //
 
-    if (sscanf(buffer, "%[^ ] %[^ ] %[^ ]", method, url, protocol) != 3)
-        send(c_fd,"400 : Bad Request\nNot Support Protocol", 1000, 0);
-    if (url[0] == '\0')
-        send(c_fd, "400 : BAD REQUEST - Null URL.", 1000, 0);
-    if (strncasecmp(url, "http://", 7) == 0)
+    char tmp[PACKET_SIZE];
+    bzero((char*)tmp, PACKET_SIZE);
+    ssize_t n;
+    if ((n = recv(c_fd, tmp, PACKET_SIZE, MSG_PEEK)) > 0)
     {
-        if (sscanf(url, "http://%[^:/]:%d%s", host, &i_port, path) == 3)
-            l_port = (long) i_port;
-        else if (sscanf(url, "http://%[^:/]%s", host, path) == 2)
-            l_port = 80;
-        else if (sscanf(url, "http://%[^/]:%d", host, &i_port) == 2  || sscanf(url, "http://%[^/]", host) == 1)
+        int idx = strchr(tmp, '\n') - tmp;
+        if (idx > 0)
         {
-            l_port = i_port ? 80 : (long) i_port;
-            * path = '\0';
-        }else
-        {
-            send(c_fd, "400 : BAD REQUEST - Cannot parse URL.", 1000, 0);
-        }
-
-        int sockfd = init_connection(host, l_port);
-        if (sockfd > 0)
-        {
-            bzero((char *) buffer, sizeof(buffer));
-            ssize_t n = send(sockfd, buffer, sizeof(buffer), 0);
+            char buffer[idx];
+            bzero((char*)buffer, idx);
+            n = recv(c_fd, buffer, idx, 0);
             if (n > 0)
             {
-                do
+                if (sscanf(buffer, "%[^ ] %[^ ] %[^ ]", method, url, protocol) != 3)
                 {
-                    bzero((char *)buffer, PACKET_SIZE);
-                    n = recv(sockfd, buffer, PACKET_SIZE, 0);
-                    if (n > 0)
-                        send(c_fd, buffer, n, 0);
-                }while(n>0);
-            }else{
-                send(c_fd, "404 - Cannot connect", 1000, 0);
+                    send(c_fd,"400 : Bad Request\nNot Support Protocol", 1000, 0);
+                    exit(0);
+                }
+                if (url[0] == '\0'){
+                    send(c_fd, "400 : BAD REQUEST - Null URL.", 1000, 0);
+                    exit(0);
+                }
+                if (strncasecmp(url, "http://", 7) == 0)
+                {
+                    if (sscanf(url, "http://%[^:/]:%d%s", host, &i_port, path) == 3)
+                        l_port = (long) i_port;
+                    else if (sscanf(url, "http://%[^:/]%s", host, path) == 2)
+                        l_port = 80;
+                    else if (sscanf(url, "http://%[^/]:%d", host, &i_port) == 2  || sscanf(url, "http://%[^/]", host) == 1)
+                    {
+                        l_port = i_port ? 80 : (long) i_port;
+                        * path = '\0';
+                    }else
+                    {
+                        send(c_fd, "400 : BAD REQUEST - Cannot parse URL.", 1000, 0);
+                    }
+
+                    int sockfd = init_connection(host, l_port);
+                    if (sockfd > 0)
+                    {
+                        ssize_t n = send(sockfd, buffer, strlen(buffer), 0);
+                        if (n > 0)
+                        {
+                            do
+                            {
+                                bzero((char *)buffer, PACKET_SIZE);
+                                n = recv(sockfd, buffer, PACKET_SIZE, 0);
+                                if (n > 0)
+                                    send(c_fd, buffer, n, 0);
+                            }while(n>0);
+                        }else{
+                            send(c_fd, "404 - Cannot connect", 1000, 0);
+                        }
+                        close(sockfd);
+                    }else{
+                        send(c_fd, "400 : BAD REQUEST:", 1000, 0);
+                    }
+                    
+                }else{
+                    
+                }
             }
-        }else{
-            send(c_fd, "400 : BAD REQUEST:", 1000, 0);
         }
-        
-    }else{
-        
     }
+
     close(c_fd);
 }
+
+
 
 int init_connection(char * host, int port) {
     struct sockaddr_in server;
