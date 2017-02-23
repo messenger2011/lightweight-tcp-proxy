@@ -111,7 +111,7 @@ void relay_data(char* method, char* path, char* protocol, FILE* remote_r, FILE *
     // reading client request
     //
     fprintf(remote_w, "%s %s %s\r\n", method, path, protocol);
-    while (fgets(buffer, sizeof(buffer), client_r) != (char*) 0)
+    while (fgets(buffer, sizeof(buffer), client_r) != (char*) 0) // caculate heade size here,not size of buffer
     {
         if (strcmp(buffer, "\n") == 0 || strcmp(buffer, "\r\n") == 0)
             break;
