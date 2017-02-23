@@ -54,7 +54,7 @@ void loop() {
 void handle_client(int c_fd, struct sockaddr_in client)
 {
     struct sockaddr_in request;
-    char method[4], url[10000], protocol[10000], host[10000], path[10000];
+    char method[4], url[100], protocol[100], host[100], path[100];
     int i_port;
     long l_port;
 
@@ -97,7 +97,7 @@ void handle_client(int c_fd, struct sockaddr_in client)
             FILE* remote_r = fdopen(remote_fd, "r");
             FILE* remote_w = fdopen(remote_fd, "w");
 
-            relay_data(method, path, protocol, remote_r, remote_w, sockr, sockw);
+            relay_data(method, url, protocol, remote_r, remote_w, sockr, sockw);
         }else{
         }
     }
@@ -106,59 +106,27 @@ void handle_client(int c_fd, struct sockaddr_in client)
 
 void relay_data(char* method, char* path, char* protocol, FILE* remote_r, FILE * remote_w, FILE* client_r, FILE* client_w)
 {
-    char buffer[BUFF_SIZE], remote_protocol[100], s[100];
-    int first_line, status, ich;
-    long content_length, i;
+    char buffer[BUFF_SIZE];
 
+    // reading client request
+    //
     fprintf(remote_w, "%s %s %s\r\n", method, path, protocol);
-    content_length = -1;
     while (fgets(buffer, sizeof(buffer), client_r) != (char*) 0)
     {
         if (strcmp(buffer, "\n") == 0 || strcmp(buffer, "\r\n") == 0)
             break;
         fputs(buffer, remote_w);
-        if (strncasecmp(buffer, "Content-Length:", 15) == 0)
-            content_length = atol(&(buffer[15]));
-    }
-    fputs(buffer, remote_w);
-    fflush(remote_w);
-    if (content_length != -1) {
-        for (i = 0; i < content_length && (ich = getchar()) != EOF; ++i)
-            putc(ich, remote_w);
     }
     fflush(remote_w);
     // relay data back to client
-    content_length = -1;
-    first_line = 1;
-    status = -1;
     while (fgets(buffer, sizeof(buffer), remote_r) != (char*) 0)
     {
         if (strcmp(buffer, "\n") == 0 || strcmp(buffer, "\r\n") == 0)
             break;
         fputs(buffer, client_w);
-        if (first_line) {
-            (void) sscanf(buffer, "%[^ ] %d", remote_protocol, &status);
-            first_line = 0;
-        }
-        if (strncasecmp(buffer, "Content-Length:", 15) == 0)
-            content_length = atol(&(buffer[15]));
     }
-    /* Add a response header. */
-    fputs("Connection: close\r\n", client_w);
-    fputs(buffer, client_w);
+    // fputs("Connection: close\r\n", client_w);
     fflush(client_w);
-    /* Under certain circumstances we don't look for the contents, even
-    ** if there was a Content-Length.
-    */
-    if (strcasecmp(method, "HEAD") != 0 && status != 304)
-    {
-        /* Forward the content too, either counted or until EOF. */
-        for (i = 0; (content_length == -1 || i < content_length) && (ich = getc(remote_r)) != EOF; ++i)
-        {
-            putchar(ich);
-        }
-    }
-    fflush(stdout);
 }
 
 int init_connection(char * host, int port) {
